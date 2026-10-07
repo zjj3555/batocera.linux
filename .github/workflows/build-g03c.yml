@@ -1,0 +1,42 @@
+name: Build Batocera G03C (rk3288)
+
+on:
+  workflow_dispatch:        # 手动触发：仓库 -> Actions -> 选本工作流 -> Run workflow
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout fork (with buildroot submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Free disk space (GitHub runner is 14GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/powershell
+          sudo apt-get clean
+          df -h /
+
+      - name: Pull batocera build docker image
+        run: |
+          make pull-docker-image
+
+      - name: Build rk3288 image
+        run: |
+          make rk3288-build
+        env:
+          BATCH_MODE: "1"
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: batocera-g03c
+          path: |
+            output/rk3288/images/batocera/images/**/batocera-*.img.gz
+            output/rk3288/images/batocera/images/**/*.img
+          if-no-files-found: error
