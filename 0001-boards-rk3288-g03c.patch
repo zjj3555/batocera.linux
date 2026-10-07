@@ -1,0 +1,245 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: G03C port <g03c@localhost>
+Date: Thu, 1 Jan 2026 00:00:00 +0000
+Subject: [PATCH] boards: rockchip: add Bozztek G03C (rk3288) board + EDP panel
+
+Adds the G03C1322 (EDP 1920x1080 @ 108MHz, ACT8846 PMIC) device tree
+and its panel mode (factory-proven timing) to the Rockchip rk3288 target.
+
+---
+ arch/arm/boot/dts/rk3288-g03c.dts         | 177
+ drivers/gpu/drm/panel/panel-edp.c         | 33
+ 2 files changed, 210 insertions(+)
+
+diff --git a/arch/arm/boot/dts/rk3288-g03c.dts b/arch/arm/boot/dts/rk3288-g03c.dts
+new file mode 100644
+index 000000000000..000000000000
+--- /dev/null
++++ b/arch/arm/boot/dts/rk3288-g03c.dts
+@@ -0,0 +1,177 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++/*
++ * Bozztek G03C1322 / "bob" — RK3288 all-in-one / ad-box
++ *   EDP 1920x1080 touch display, ACT8846 PMIC, 2GB RAM, 32GB eMMC
++ *   No TF slot, no SDIO wifi. Ethernet = RK3288 GMAC (RGMII, 100M).
++ *
++ * Base: Rockchip EVB (rk3288-evb.dtsi) + EVB-act8846 PMIC.
++ * G03C-specific changes vs. EVB-act8846:
++ *   - Panel: 1920x1080 @ 108 MHz (factory-proven), enable GPIO5_C2
++ *     (driver entry added to drivers/gpu/drm/panel/panel-edp.c)
++ *   - No TF card slot -> sdmmc disabled
++ *   - Touch (wdt_ts_i2c @ i2c4/0x2c) has no mainline driver (noted)
++ */
++/dts-v1/;
++#include "rk3288-evb.dtsi"
++/ {
++	model = "Bozztek G03C (RK3288)";
++	compatible = "rockchip,rk3288-evb-act8846", "rockchip,rk3288";
++
++	vcc_lcd: vcc-lcd {
++		compatible = "regulator-fixed";
++		enable-active-high;
++		gpio = <&gpio7 RK_PA3 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&lcd_en>;
++		regulator-name = "vcc_lcd";
++		vin-supply = <&vcc_io>;
++	};
++};
++
++/* ACT8846 PMIC setup (same as EVB-act8846 reference) */
++&i2c0 {
++	clock-frequency = <400000>;
++	vdd_cpu: syr827@40 {
++		compatible = "silergy,syr827";
++		fcs,suspend-voltage-selector = <1>;
++		reg = <0x40>;
++		regulator-name = "vdd_cpu";
++		regulator-min-microvolt = <850000>;
++		regulator-max-microvolt = <1350000>;
++		regulator-always-on;
++		regulator-boot-on;
++		vin-supply = <&vcc_sys>;
++	};
++	vdd_gpu: syr828@41 {
++		compatible = "silergy,syr828";
++		fcs,suspend-voltage-selector = <1>;
++		reg = <0x41>;
++		regulator-name = "vdd_gpu";
++		regulator-min-microvolt = <850000>;
++		regulator-max-microvolt = <1350000>;
++		regulator-always-on;
++		vin-supply = <&vcc_sys>;
++	};
++	rtc@51 {
++		compatible = "haoyu,hym8563";
++		reg = <0x51>;
++		interrupt-parent = <&gpio0>;
++		interrupts = <RK_PA4 IRQ_TYPE_EDGE_FALLING>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pmic_int>;
++		#clock-cells = <0>;
++		clock-output-names = "xin32k";
++	};
++	act8846: act8846@5a {
++		compatible = "active-semi,act8846";
++		reg = <0x5a>;
++		status = "okay";
++		vp1-supply = <&vcc_sys>;
++		vp2-supply = <&vcc_sys>;
++		vp3-supply = <&vcc_sys>;
++		vp4-supply = <&vcc_sys>;
++		inl1-supply = <&vcc_io>;
++		inl2-supply = <&vcc_sys>;
++		inl3-supply = <&vcc_20>;
++		regulators {
++			vcc_ddr: REG1 {
++				regulator-name = "VCC_DDR";
++				regulator-min-microvolt = <1200000>;
++				regulator-max-microvolt = <1200000>;
++				regulator-always-on;
++			};
++			vcc_io: REG2 {
++				regulator-name = "VCC_IO";
++				regulator-min-microvolt = <3300000>;
++				regulator-max-microvolt = <3300000>;
++				regulator-always-on;
++			};
++			vdd_log: REG3 {
++				regulator-name = "VDD_LOG";
++				regulator-min-microvolt = <700000>;
++				regulator-max-microvolt = <1500000>;
++				regulator-always-on;
++			};
++			vcc_20: REG4 {
++				regulator-name = "VCC_20";
++				regulator-min-microvolt = <2000000>;
++				regulator-max-microvolt = <2000000>;
++				regulator-always-on;
++			};
++			vccio_sd: REG5 {
++				regulator-name = "VCCIO_SD";
++				regulator-min-microvolt = <1800000>;
++				regulator-max-microvolt = <3300000>;
++				regulator-always-on;
++			};
++			vdd10_lcd: REG6 {
++				regulator-name = "VDD10_LCD";
++				regulator-min-microvolt = <1000000>;
++				regulator-max-microvolt = <1000000>;
++				regulator-always-on;
++			};
++			vcca_codec: REG7 {
++				regulator-name = "VCCA_CODEC";
++				regulator-min-microvolt = <3300000>;
++				regulator-max-microvolt = <3300000>;
++				regulator-always-on;
++			};
++			vcc_tp: REG8 {
++				regulator-name = "VCCA_TP";
++				regulator-min-microvolt = <3300000>;
++				regulator-max-microvolt = <3300000>;
++				regulator-always-on;
++			};
++			vccio_pmu: REG9 {
++				regulator-name = "VCCIO_PMU";
++				regulator-min-microvolt = <3300000>;
++				regulator-max-microvolt = <3300000>;
++				regulator-always-on;
++			};
++			vdd_10: REG10 {
++				regulator-name = "VDD_10";
++				regulator-min-microvolt = <1000000>;
++				regulator-max-microvolt = <1000000>;
++				regulator-always-on;
++			};
++			vcc_18: REG11 {
++				regulator-name = "VCC_18";
++				regulator-min-microvolt = <1800000>;
++				regulator-max-microvolt = <1800000>;
++				regulator-always-on;
++			};
++			vcc18_lcd: REG12 {
++				regulator-name = "VCC18_LCD";
++				regulator-min-microvolt = <1800000>;
++				regulator-max-microvolt = <1800000>;
++				regulator-always-on;
++			};
++		};
++	};
++};
++
++/* G03C eDP panel: 1920x1080 @ 108 MHz (factory-proven), enable GPIO5_C2 */
++&panel {
++	compatible = "bozztek,g03c-1080p";
++	enable-gpios = <&gpio5 RK_PC2 GPIO_ACTIVE_HIGH>;
++	pinctrl-0 = <&lcd_cs>;
++	power-supply = <&vcc_lcd>;
++};
++
++/* No TF card slot on G03C */
++&sdmmc {
++	status = "disabled";
++};
++
++&pinctrl {
++	lcd {
++		lcd_en: lcd-en {
++			rockchip,pins = <7 RK_PA3 RK_FUNC_GPIO &pcfg_pull_none>;
++		};
++	};
++};
++
++/* Override the EVB's lcd_cs pin (gpio7 A4) to the G03C panel-enable GPIO5_C2 */
++&lcd_cs {
++	rockchip,pins = <5 RK_PC2 RK_FUNC_GPIO &pcfg_pull_none>;
++};
+
+--- a/drivers/gpu/drm/panel/panel-edp.c
++++ b/drivers/gpu/drm/panel/panel-edp.c
+@@ -1717,10 +1717,43 @@
+ 	},
+ };
+ 
++static const struct drm_display_mode bozztek_g03c_1080p_mode = {
++	.clock = 108000,
++	.hdisplay = 1920,
++	.hsync_start = 1920 + 82,
++	.hsync_end = 1920 + 82 + 40,
++	.htotal = 1920 + 82 + 40 + 100,
++	.vdisplay = 1080,
++	.vsync_start = 1080 + 8,
++	.vsync_end = 1080 + 8 + 4,
++	.vtotal = 1080 + 8 + 4 + 10,
++	.flags = DRM_MODE_FLAG_NVSYNC | DRM_MODE_FLAG_NHSYNC,
++};
++
++static const struct panel_desc bozztek_g03c_1080p = {
++	.modes = &bozztek_g03c_1080p_mode,
++	.num_modes = 1,
++	.bpc = 8,
++	.size = {
++		.width = 100,
++		.height = 56,
++	},
++	.delay = {
++		.hpd_absent = 200,
++		.prepare = 100,
++		.enable = 100,
++		.unprepare = 100,
++	},
++};
++
++
+ static const struct of_device_id platform_of_match[] = {
+ 	{
+ 		/* Must be first */
+ 		.compatible = "edp-panel",
++	}, {
++		.compatible = "bozztek,g03c-1080p",
++		.data = &bozztek_g03c_1080p,
+ 	}, {
+ 		.compatible = "auo,b101ean01",
+ 		.data = &auo_b101ean01,
+-- 
+2.34.1
