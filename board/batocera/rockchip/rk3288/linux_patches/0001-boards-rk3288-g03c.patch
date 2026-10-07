@@ -1,22 +1,8 @@
-From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: G03C port <g03c@localhost>
-Date: Thu, 1 Jan 2026 00:00:00 +0000
-Subject: [PATCH] boards: rockchip: add Bozztek G03C (rk3288) board + EDP panel
+# Bozztek G03C (rk3288): add G03C device tree + EDP panel (108MHz)
 
-Adds the G03C1322 (EDP 1920x1080 @ 108MHz, ACT8846 PMIC) device tree
-and its panel mode (factory-proven timing) to the Rockchip rk3288 target.
-
----
- arch/arm/boot/dts/rk3288-g03c.dts         | 177
- drivers/gpu/drm/panel/panel-edp.c         | 33
- 2 files changed, 210 insertions(+)
-
-diff --git a/arch/arm/boot/dts/rk3288-g03c.dts b/arch/arm/boot/dts/rk3288-g03c.dts
-new file mode 100644
-index 000000000000..000000000000
 --- /dev/null
 +++ b/arch/arm/boot/dts/rk3288-g03c.dts
-@@ -0,0 +1,177 @@
+@@ -0,0 +1,182 @@
 +// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
 +/*
 + * Bozztek G03C1322 / "bob" — RK3288 all-in-one / ad-box
@@ -182,6 +168,11 @@ index 000000000000..000000000000
 +	status = "disabled";
 +};
 +
++/* G03C Ethernet is 100M (factory) — pin the GMAC to 100M to guarantee link */
++&gmac {
++	max-speed = <100>;
++};
++
 +&pinctrl {
 +	lcd {
 +		lcd_en: lcd-en {
@@ -241,5 +232,3 @@ index 000000000000..000000000000
  	}, {
  		.compatible = "auo,b101ean01",
  		.data = &auo_b101ean01,
--- 
-2.34.1
