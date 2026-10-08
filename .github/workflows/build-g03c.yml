@@ -8,7 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 420
     steps:
       - name: Checkout fork (with buildroot submodule)
         uses: actions/checkout@v4
@@ -16,15 +16,25 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Free disk space (GitHub runner is 14GB)
+      # GitHub free runner = 14GB SSD / 7GB RAM. Batocera full build needs a LOT,
+      # so strip every cache/package we can and add swap against OOM.
+      - name: Maximize disk space + add swap
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/powershell
+          sudo rm -rf /opt/hostedtoolcache /usr/local/.ghcup /usr/share/swift /usr/share/miniconda
+          sudo rm -rf /home/runner/.cache/pip /home/runner/.cache/npm /home/runner/.cache/ms-playwright
+          sudo rm -rf /home/runner/.cache/go-build /home/runner/.cargo /home/runner/.rustup
           sudo apt-get clean
-          df -h /
+          sudo rm -rf /var/lib/apt/lists/*
+          sudo rm -rf /usr/lib/jvm /usr/local/lib/python*
+          sudo fallocate -l 8G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+          echo "=== disk after cleanup ==="; df -h /
+          echo "=== swap ==="; free -h
 
       - name: Pull batocera build docker image
         run: |
           make pull-docker-image
+          echo "=== disk after docker pull ==="; df -h /
 
       - name: Build rk3288 image
         run: |
@@ -32,11 +42,18 @@ jobs:
         env:
           BATCH_MODE: "1"
 
+      - name: Report disk usage
+        if: always()
+        run: |
+          echo "=== disk after build ==="; df -h /
+          echo "=== docker sizes ==="; docker system df || true
+
       - name: Upload image artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: batocera-g03c
           path: |
             output/rk3288/images/batocera/images/**/batocera-*.img.gz
             output/rk3288/images/batocera/images/**/*.img
-          if-no-files-found: error
+          if-no-files-found: ignore
